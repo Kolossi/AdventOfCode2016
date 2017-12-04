@@ -1,0 +1,4 @@
+aaaaa-bbb-z-y-x-123[abxyz]:1
+a-b-c-d-e-f-g-h-987[abcde]:1
+not-a-real-room-404[oarel]:1
+totally-real-room-200[decoy]:0
