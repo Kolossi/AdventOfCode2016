@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace Runner
@@ -89,6 +90,13 @@ namespace Runner
             }
 
             var lines = input.Split("\n\r".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            if (lines[lines.Length-1][0]==':')
+            {
+                lines = new string[1]{
+                    string.Join("\r\n",lines.Take(lines.Length-1))+lines[lines.Length-1]
+                };
+            }
 
             foreach (var line in lines)
             {
