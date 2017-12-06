@@ -30,7 +30,7 @@ namespace Runner
 
         public class Operation : OneOfBase<Operation.Rect, Operation.RotateRow, Operation.RotateColumn>
         {
-            public class Rect
+            public class Rect : Operation
             {
                 public int A { get; set; }
                 public int B { get; set; }
@@ -41,7 +41,7 @@ namespace Runner
                 }
             }
 
-            public class RotateRow
+            public class RotateRow : Operation
             {
                 public int Row { get; set; }
                 public int Pixels { get; set; }
@@ -52,7 +52,7 @@ namespace Runner
                 }
             }
 
-            public class RotateColumn
+            public class RotateColumn : Operation
             {
                 public int Column { get; set; }
                 public int Pixels { get; set; }
@@ -113,7 +113,7 @@ namespace Runner
             return sb.ToString();
         }
 
-        private bool[,] PerformOperations(List<OneOf<Operation.Rect, Operation.RotateRow, Operation.RotateColumn>> operations, int screenX, int screenY)
+        private bool[,] PerformOperations(List<Operation> operations, int screenX, int screenY)
         {
             var pixels = new bool[screenX, screenY];
 
@@ -162,11 +162,11 @@ namespace Runner
             return pixels;
         }
 
-        public List<OneOf<Operation.Rect, Operation.RotateRow, Operation.RotateColumn>> GetOperations(string input)
+        public List<Operation> GetOperations(string input)
         {
             var lines = GetLines(input);
 
-            var operations = new List<OneOf<Operation.Rect, Operation.RotateRow, Operation.RotateColumn>>();
+            var operations = new List<Operation>();
 
             //var operations = new List<Operation>();
 
