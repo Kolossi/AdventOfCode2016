@@ -132,7 +132,9 @@ namespace Runner
         public string GetInput(string set)
         {
             string filename = string.Format("Inputs/{0}{1}.txt",this.GetType().Name, set);
+            if (set == "Second" && !File.Exists(filename)) return GetInput("First");
             string input = System.IO.File.ReadAllText(filename);
+            if (set == "Second" && input == "FIRST") return GetInput("First");
             return input;
         }
 
