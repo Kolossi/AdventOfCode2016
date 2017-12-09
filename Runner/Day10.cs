@@ -33,20 +33,25 @@ namespace Runner
                 chip1 = chip2;
                 chip2 = tmp;
             }
-            var factory = GetFactory(lines);
-            return factory.Destinations
-                .Where(d => d.Match(
-                    bot => (bot.LowChip == chip1 && bot.HighChip == chip2),
-                    bin => false))
-                .First()
-                .Match(
-                    bot => bot.Number.ToString(),
-                    bin => "");
+            var factory = GetFactory(lines, chip1, chip2);
+
+            return factory.WatchBot.Number.ToString();
         }
 
-        public Factory GetFactory(string[] lines)
+        private string ProcessFirst(string[] lines, int[] outputs)
         {
-            var factory = new Factory();
+            var factory = GetFactory(lines, 0, 0);
+
+            return factory.Destinations
+                .Where(d => d.Match(bot => false, bin => bin.Chip.HasValue && outputs.Contains(bin.Number)))
+                .Select(d=>d.AsT1.Chip.Value)
+                .Aggregate((a, b) => a * b)
+                .ToString();
+        }
+
+        public Factory GetFactory(string[] lines, int chip1, int chip2)
+        {
+            var factory = new Factory() { FirstWatchChip = chip1, SecondWatchChip = chip2 };
             foreach (var line in lines)
             {
                 var parts = GetParts(line);
@@ -56,7 +61,9 @@ namespace Runner
                     if (parts[4]=="bot")
                     {
                         var botnum = int.Parse(parts[5]);
-                        factory.GetOrMakeBot(botnum).TakeChip(value);
+                        var bot = factory.GetOrMakeBot(botnum);
+                        bot.TakeChip(value);
+                        bot.GiveChips();
                     }
                     else
                     {
@@ -71,24 +78,30 @@ namespace Runner
                     var bot = factory.GetOrMakeBot(botNum);
                     bot.LowDest = factory.GetOrMakeDestinationFromInput(parts[5], parts[6]);
                     bot.HighDest = factory.GetOrMakeDestinationFromInput(parts[10], parts[11]);
+                    bot.GiveChips();
                 }
                 else
                 {
                     throw new InvalidOperationException("unrecognised line");
                 }
             }
+
             return factory;
         }
 
         public override string Second(string input)
         {
-            throw new NotImplementedException();
+            var lines = GetLines(input);
+            return ProcessFirst(lines, new int[] { 0, 1, 2 });
         }
     }
 
     public class Factory
     {
         public List<Destination> Destinations { get; set; }
+        public int FirstWatchChip { get; set; }
+        public int SecondWatchChip { get; set; }
+        public Destination.Bot WatchBot { get; set; }
         public Factory()
         {
             Destinations = new List<Destination>();
@@ -115,6 +128,7 @@ namespace Runner
     {
         public class Bot : Destination
         {
+            public Factory Factory { get; set; }
             public int Number { get; set; }
             public int? LowChip { get; set; }
             public int? HighChip { get; set; }
@@ -135,6 +149,7 @@ namespace Runner
 
         public class Bin : Destination
         {
+            public Factory Factory { get; set; }
             public int Number { get; set; }
             public int? Chip { get; set; }
 
@@ -149,6 +164,14 @@ namespace Runner
         public override string ToString()
         {
             return this.Match(bot => bot.ToString(), bin => bin.ToString());
+        }
+
+        public Factory Factory
+        {
+            get
+            {
+                return this.Match(bot => bot.Factory, bin => bin.Factory);
+            }
         }
     }
 
@@ -177,7 +200,12 @@ namespace Runner
                 ? self.Destinations.First(d => d.Match(bot => bot.Number == botNum, bin => false)) as Destination.Bot
                 : null;
             if (existing != null) return existing;
-            var newBot = new Destination.Bot() { Number = botNum };
+            var newBot = new Destination.Bot() {
+                Factory = self,
+                Number = botNum,
+                HighChip = null,
+                LowChip = null
+            };
             self.Destinations.Add(newBot);
             return newBot;
         }
@@ -188,7 +216,7 @@ namespace Runner
                 ? self.Destinations.First(d => d.Match(bot => false, bin => bin.Number == binNum)) as Destination.Bin
                 : null;
             if (existing != null) return existing;
-            var newBin = new Destination.Bin() { Number = binNum };
+            var newBin = new Destination.Bin() { Factory = self, Number = binNum };
             self.Destinations.Add(newBin);
             return newBin;
         }
@@ -200,12 +228,28 @@ namespace Runner
 
         public static Destination TakeChip(this Destination.Bot self, int chip)
         {
-            if (self.HighChip > 0) throw new InvalidOperationException("Three chips");
+            if (self.HighChip.HasValue) throw new InvalidOperationException("Three chips");
 
-            self.HighChip = !self.LowChip.HasValue  ? 0 : Math.Max(chip, self.LowChip.Value);
+            self.HighChip = !self.LowChip.HasValue  ? (int?)null : Math.Max(chip, self.LowChip.Value);
             self.LowChip = !self.LowChip.HasValue ? chip : Math.Min(chip, self.LowChip.Value);
-            
 
+            if (self.LowChip.HasValue && self.HighChip.HasValue) self.GiveChips();
+
+            return self;
+        }
+
+        public static Destination.Bot NotifyChips(this Destination.Bot self)
+        {
+            if (self.LowChip.HasValue && self.HighChip.HasValue)
+            {
+                self.Factory.NotifyChips(self, self.LowChip.Value, self.HighChip.Value);
+            }
+            return self;
+        }
+
+        public static Factory NotifyChips(this Factory self, Destination.Bot bot, int chip1, int chip2)
+        {
+            if (chip1 == self.FirstWatchChip && chip2 == self.SecondWatchChip) self.WatchBot = bot;
             return self;
         }
 
@@ -220,9 +264,12 @@ namespace Runner
         
         public static Destination GiveChips(this Destination.Bot self)
         {
-            if (!self.LowChip.HasValue || !self.HighChip.HasValue) throw new InvalidOperationException("Chips not full");
+            if (!self.LowChip.HasValue || !self.HighChip.HasValue || self.LowDest==null || self.HighDest==null) return self;
+            self.NotifyChips();
             self.LowDest.TakeChip(self.LowChip.Value);
             self.HighDest.TakeChip(self.HighChip.Value);
+            self.LowChip = null;
+            self.HighChip = null;
             return self;
         }
     }
