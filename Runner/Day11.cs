@@ -14,7 +14,17 @@ namespace Runner
             microchip
         }
 
-        
+        public enum Material
+        {
+            hydrogen,
+            lithium,
+            polonium,
+            thulium,
+            promethium,
+            ruthenium,
+            cobalt
+        }
+
         public class Facility
         {
             public int MovesMade { get; set; }
@@ -81,12 +91,10 @@ namespace Runner
                 var floor = Floors.First(f => f.FloorNum == Elevator.FloorNum);
 
                 var possibleElevatorItems = GetFloorElevatorItems(floor);
-                var destFloors = new List<Floor>();
-                if (floor.FloorNum < Floors.Count) destFloors.Add(Floors.First(f => f.FloorNum == (floor.FloorNum + 1)));
-                if (floor.FloorNum > 1) destFloors.Add(Floors.First(f => f.FloorNum == (floor.FloorNum - 1)));
-                
-                foreach (var destFloor in destFloors)
+
+                if (floor.FloorNum < Floors.Count)
                 {
+                    var destFloor = Floors.First(f => f.FloorNum == (floor.FloorNum + 1));
                     foreach (var elevatorItems in possibleElevatorItems)
                     {
                         var move = new Move()
@@ -99,6 +107,23 @@ namespace Runner
                         if (MoveResultIsValid(move)) validMoves.Add(move);
                     }
                 }
+
+                if (floor.FloorNum > 1)
+                {
+                    var destFloor = Floors.First(f => f.FloorNum == (floor.FloorNum - 1));
+                    foreach (var elevatorItems in possibleElevatorItems.Where(e=>e.Count()==1 && e.Any(i=>i.ItemType==ItemType.microchip)))
+                    {
+                        var move = new Move()
+                        {
+                            StartFloorNum = floor.FloorNum,
+                            EndFloorNum = destFloor.FloorNum,
+                            Items = elevatorItems
+                        };
+
+                        if (MoveResultIsValid(move)) validMoves.Add(move);
+                    }
+                }
+                
                 return validMoves;
             }
 
@@ -109,21 +134,24 @@ namespace Runner
 
             private bool MoveResultIsValid(Move move)
             {
-                //%%%%%
                 //only a single chip can go down
-                if (move.EndFloorNum < move.StartFloorNum && (move.Items.Count() > 1 || move.Items.Any(i => i.ItemType == ItemType.generator)))
+                if (move.EndFloorNum < move.StartFloorNum
+                    && (move.Items.Count() > 1 || move.Items.Any(i => i.ItemType == ItemType.generator)))
+                {
                     return false;
+                }
 
-                // no gens down
-                //if (move.EndFloorNum < move.StartFloorNum && move.Items.Any(i => i.ItemType == ItemType.generator)) return false;
-                //%%%%%%
+                if (move.EndFloorNum > move.StartFloorNum 
+                    && Current.ChipsAway 
+                    && (move.Items.Count() == 1 || move.Items.Any(i => i.ItemType == ItemType.microchip)))
+                {
+                    //return false;
+                }
 
                 var newState = Current.Clone();
                 DoMove(newState, move);
                 var startFloor = newState.Floors.First(f => f.FloorNum == move.StartFloorNum);
                 var endFloor = newState.Floors.First(f => f.FloorNum == move.EndFloorNum);
-
-                
 
                 if (ChipFried(startFloor.Items) || ChipFried(endFloor.Items)
                     || Math.Abs(move.StartFloorNum - move.EndFloorNum) != 1
@@ -142,39 +170,59 @@ namespace Runner
 
             private List<List<Item>> GetFloorElevatorItems(Floor floor)
             {
-                var possibleElevatorItems = new List<List<Item>>();
-                var chips = floor.Items.Where(i => i.ItemType == ItemType.microchip);
-                var generators = floor.Items.Where(i => i.ItemType == ItemType.generator);
-                var generatorlessChips = chips.Where(c => !generators.Any(g => g.Material == c.Material));
-                var chiplessGenerators = generators.Where(g => !chips.Any(c => c.Material == g.Material));
-                var pairMaterials = chips.Where(c => generators.Any(g => g.Material == c.Material)).Select(c => c.Material); ;
-                // add each chipless generator pair
-                possibleElevatorItems.AddRange(chiplessGenerators.SelectMany(g1 => chiplessGenerators.Where(g2 => string.Compare(g1.Material, g2.Material) > 0).Select(g2 => new List<Item>(new Item[] { g1, g2 }))));
+                var moves = new List<List<Item>>();
+                var currentFloorItems = Floors.First(f => f.FloorNum == Elevator.FloorNum).Items;
 
-                // add each individual chipless generator
-                possibleElevatorItems.AddRange(chiplessGenerators.Select(g => new List<Item>(new Item[] { g })));
+                //add pairs
+                moves.AddRange(currentFloorItems
+                    .SelectMany(i1 => currentFloorItems.Where(i => !i1.Equals(i)
+                    && (i.ItemType==i1.ItemType || i.Material==i1.Material)
+                    && i.ItemType<=i1.ItemType && i.Material<=i1.Material)
+                    .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
 
-                // add each chip/generator pair
-                possibleElevatorItems.AddRange(pairMaterials.Select(m => new List<Item>(new Item[] { chips.First(c => c.Material == m), generators.First(g => g.Material == m) })));
+                //add single items
+                moves.AddRange(currentFloorItems.Select(i => new List<Item>(new Item[] { i })));
 
-                if (chips.Count() <= 1 && generators.Any())
-                {
-                    // add each generator pair
-                    possibleElevatorItems.AddRange(generators.SelectMany(g1 => generators.Where(g2 => string.Compare(g1.Material, g2.Material) > 0).Select(g2 => new List<Item>(new Item[] { g1, g2 }))));
-                    // add each individual generator
-                    possibleElevatorItems.AddRange(generators.Select(g => new List<Item>(new Item[] { g })));
-                }
+                moves = moves.OrderByDescending(m => m.Count(i => i.ItemType == ItemType.generator))
+                    .ThenByDescending(m => m.Count(i => i.ItemType == ItemType.microchip))
+                    .ThenBy(m=>m.Min(i=>i.Material))
+                    .ToList();
 
-                // add each chip pair
-                possibleElevatorItems.AddRange(chips.SelectMany(c1 => chips.Where(c2 => string.Compare(c1.Material, c2.Material) > 0)
-                                                                      .Select(c2 => new List<Item>(new Item[] { c1, c2 }))));
-                // add each individual chip
-                possibleElevatorItems.AddRange(chips.Select(c => new List<Item>(new Item[] { c })));
+                return moves;
+
+
+                //var chips = floor.Items.Where(i => i.ItemType == ItemType.microchip);
+                //var generators = floor.Items.Where(i => i.ItemType == ItemType.generator);
+                //var generatorlessChips = chips.Where(c => !generators.Any(g => g.Material == c.Material));
+                //var chiplessGenerators = generators.Where(g => !chips.Any(c => c.Material == g.Material));
+                //var pairMaterials = chips.Where(c => generators.Any(g => g.Material == c.Material)).Select(c => c.Material); ;
+                //// add each chipless generator pair
+                //possibleElevatorItems.AddRange(chiplessGenerators.SelectMany(g1 => chiplessGenerators.Where(g2 => string.Compare(g1.Material, g2.Material) > 0).Select(g2 => new List<Item>(new Item[] { g1, g2 }))));
+
+                //// add each individual chipless generator
+                //possibleElevatorItems.AddRange(chiplessGenerators.Select(g => new List<Item>(new Item[] { g })));
+
+                //// add each chip/generator pair
+                //possibleElevatorItems.AddRange(pairMaterials.Select(m => new List<Item>(new Item[] { chips.First(c => c.Material == m), generators.First(g => g.Material == m) })));
+
+                //if (chips.Count() <= 1 && generators.Any())
+                //{
+                //    // add each generator pair
+                //    possibleElevatorItems.AddRange(generators.SelectMany(g1 => generators.Where(g2 => string.Compare(g1.Material, g2.Material) > 0).Select(g2 => new List<Item>(new Item[] { g1, g2 }))));
+                //    // add each individual generator
+                //    possibleElevatorItems.AddRange(generators.Select(g => new List<Item>(new Item[] { g })));
+                //}
+
+                //// add each chip pair
+                //possibleElevatorItems.AddRange(chips.SelectMany(c1 => chips.Where(c2 => string.Compare(c1.Material, c2.Material) > 0)
+                //                                                      .Select(c2 => new List<Item>(new Item[] { c1, c2 }))));
+                //// add each individual chip
+                //possibleElevatorItems.AddRange(chips.Select(c => new List<Item>(new Item[] { c })));
 
 
 
  
-                return possibleElevatorItems.Where(l1 => !possibleElevatorItems.Any(l2 => l2 != l1 && Item.AreSame(l2, l1))).ToList();
+                //return possibleElevatorItems.Where(l1 => !possibleElevatorItems.Any(l2 => l2 != l1 && Item.AreSame(l2, l1))).ToList();
             }
 
             public Facility DoMove(Move move)
@@ -187,7 +235,11 @@ namespace Runner
             }
 
             public static State DoMove(State newState, Move move)
-            { 
+            {
+                if (move.Items.Count() == 1 && move.Items.Any(i => i.ItemType == ItemType.microchip) && move.EndFloorNum < move.StartFloorNum)
+                {
+                    newState.ChipsAway = true;
+                }
                 var startFloor = newState.Floors.First(f=>f.FloorNum==move.StartFloorNum);
                 var endFloor = newState.Floors.First(f => f.FloorNum == move.EndFloorNum);
                 startFloor.Items = new List<Item>(startFloor.Items.Except(move.Items));
@@ -225,13 +277,15 @@ namespace Runner
         {
             public List<Floor> Floors { get; set; }
             public Elevator Elevator { get; set; }
+            public bool ChipsAway { get; set; }
 
             public State Clone()
             {
                 return new State()
                 {
                     Floors = Floors.Select(f => f.Clone()).ToList(),
-                    Elevator = Elevator.Clone()
+                    Elevator = Elevator.Clone(),
+                    ChipsAway = ChipsAway
                 };
             }
 
@@ -251,23 +305,23 @@ namespace Runner
         public class Item
         {
             public ItemType ItemType { get; set; }
-            public string Material { get; set; }
+            public Material Material { get; set; }
 
             public override string ToString()
             {
-                return string.Format("{0} {1:G}", Material, ItemType);
+                return string.Format("{0:G} {1:G}", Material, ItemType);
             }
 
             public override bool Equals(object obj)
             {
                 var item = obj as Item;
                 if (item == null) return false;
-                return (ItemType == item.ItemType && Material.Equals(item.Material));
+                return (ItemType == item.ItemType && Material==item.Material);
             }
 
             public override int GetHashCode()
             {
-                return 97 ^ (int)ItemType ^ Material.GetHashCode();
+                return 97 ^ (int)ItemType ^ (int)Material;
             }
 
             public static bool AreSame(IEnumerable<Item> left,IEnumerable<Item> right)
@@ -378,7 +432,7 @@ namespace Runner
                     var words = GetParts(itemString);
                     var item = new Item()
                     {
-                        Material = words[0],
+                        Material = (Material)Enum.Parse(typeof(Material), words[0]),
                         ItemType = (ItemType)Enum.Parse(typeof(ItemType), words[1])
                     };
                     floor.Items.Add(item);
