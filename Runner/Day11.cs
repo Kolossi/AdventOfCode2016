@@ -143,9 +143,10 @@ namespace Runner
 
                 if (move.EndFloorNum > move.StartFloorNum 
                     && Current.ChipsAway 
-                    && (move.Items.Count() == 1 || move.Items.Any(i => i.ItemType == ItemType.microchip)))
+                    && move.Items.Count() == 1
+                    && move.Items.Any(i => i.ItemType == ItemType.microchip))
                 {
-                    //return false;
+                    return false;
                 }
 
                 var newState = Current.Clone();
@@ -153,9 +154,21 @@ namespace Runner
                 var startFloor = newState.Floors.First(f => f.FloorNum == move.StartFloorNum);
                 var endFloor = newState.Floors.First(f => f.FloorNum == move.EndFloorNum);
 
+                var endChips = endFloor.Items.Where(i => i.ItemType == ItemType.microchip);
+                var endGenerators = endFloor.Items.Where(i => i.ItemType == ItemType.generator);
+                var endGeneratorlessChips = endChips.Where(c => !endGenerators.Any(g => g.Material == c.Material));
+
+                var startChips = startFloor.Items.Where(i => i.ItemType == ItemType.microchip);
+                var startGenerators = startFloor.Items.Where(i => i.ItemType == ItemType.generator);
+                var startGeneratorlessChips = startChips.Where(c => !startGenerators.Any(g => g.Material == c.Material));
+
+
                 if (ChipFried(startFloor.Items) || ChipFried(endFloor.Items)
                     || Math.Abs(move.StartFloorNum - move.EndFloorNum) != 1
-                    || Previous.Contains(newState))
+                    || Previous.Contains(newState)
+                    || (startGenerators.Count() > 1 && endGeneratorlessChips.Count() > 2)
+                    || (endGenerators.Count() > 1 && startGeneratorlessChips.Count() > 2)
+                    )
                 {
                     return false;
                 }
@@ -173,12 +186,16 @@ namespace Runner
                 var moves = new List<List<Item>>();
                 var currentFloorItems = Floors.First(f => f.FloorNum == Elevator.FloorNum).Items;
 
-                //add pairs
+                //add same material pairs
                 moves.AddRange(currentFloorItems
-                    .SelectMany(i1 => currentFloorItems.Where(i => !i1.Equals(i)
-                    && (i.ItemType==i1.ItemType || i.Material==i1.Material)
-                    && i.ItemType<=i1.ItemType && i.Material<=i1.Material)
-                    .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
+                    .SelectMany(i1 => currentFloorItems.Where(i => i.Material == i1.Material && i.ItemType < i1.ItemType)
+                                                       .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
+
+                //add same type pairs
+                moves.AddRange(currentFloorItems
+                    .SelectMany(i1 => currentFloorItems.Where(i => i.ItemType == i1.ItemType && i.Material < i1.Material)
+                                                       .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
+
 
                 //add single items
                 moves.AddRange(currentFloorItems.Select(i => new List<Item>(new Item[] { i })));
@@ -475,8 +492,8 @@ namespace Runner
             {
                 var withMove = facility.Clone().DoMove(move);
                 Console.WriteLine(string.Format("{0} : {1}{2}",
-                    string.Join(",", withMove.Floors.Select(f => f.Items.Count(i => i.ItemType == ItemType.generator).ToString())),
-                    string.Join("",Enumerable.Repeat(" ",facility.MovesMade)),
+                    string.Join("|", withMove.Floors.Select(f => string.Format("{0},{1}", f.Items.Count(i => i.ItemType == ItemType.generator), f.Items.Count(i => i.ItemType == ItemType.microchip)))),
+                    string.Join("", Enumerable.Repeat(" ", facility.MovesMade)),
                     move));
                 var result = MoveToTop(withMove);
                 if (result != null) return result;
