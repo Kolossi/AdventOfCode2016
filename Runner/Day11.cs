@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Metadata.Ecma335;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -22,12 +23,15 @@ namespace Runner
             thulium,
             promethium,
             ruthenium,
-            cobalt
+            cobalt,
+            elerium,
+            dilithium
         }
 
         public class Facility
         {
             public int MovesMade { get; set; }
+            public static List<Material> Materials;
             private State _Current;
             public State Current {
                 get
@@ -41,7 +45,7 @@ namespace Runner
                 }
             }
 
-            public List<State> Previous { get; set; }
+            public static List<EquivalentState> Previous { get; set; }
             public List<Floor> Floors
             {
                 get
@@ -55,12 +59,44 @@ namespace Runner
                 }
             }
 
+            public override string ToString()
+            {
+                return string.Format("#{0}>{1}", MovesMade, Current);
+            }
+
+            public static bool StateSeenBefore(EquivalentState newState)
+            {
+                // make arequivalent(state1,state2) which for each material finds the int pairs of floors where its chip and gen are.
+                // Then order these pairs by floor1,floor2
+                // equivalence means the pairs are identical (including dups) - the actual material is not important but its pattern still is:
+                //So these are equivalent:
+                //
+                //hydrogen - chip hydrogen - generator
+                //lithium - chip
+                //lithium - generator
+                //
+                //and
+                //
+                //lithium - chip lithium - generator
+                //hydrogen - chip
+                //hydrogen - generator
+                //
+                //however  if middle row in lower example above was cobalt-chip instead of hydrogen-chip it wouldn't be equivalent
+                // because the lower 2 floors chip and gen are different materials now, whereas they were the same before
+                if (Previous == null)
+                {
+                    Previous = new List<EquivalentState>();
+                    return false;
+                }
+                return Previous.Any(s=>s.Equals(newState));
+            }
+
             public Facility Clone()
             {
                 return new Facility()
                 {
                     MovesMade = MovesMade,
-                    Previous = new List<State>(Previous.Select(p => p.Clone())),
+                    //Previous = new List<State>(Previous.Select(p => p.Clone())),
                     Current = Current.Clone(),
                     Floors = new List<Floor>(Floors.Select(f => f.Clone())),
                     Elevator = Elevator.Clone()
@@ -82,7 +118,14 @@ namespace Runner
 
             public void SaveState()
             {
-                if (Current != null) Previous.Add(Current.Clone());
+                if (Current != null)
+                {
+                    var currentEquivalent = new EquivalentState(Current, Materials);
+                    if (!StateSeenBefore(currentEquivalent))
+                    {
+                        Previous.Add(currentEquivalent);
+                    }
+                }
             }
 
             public List<Move> GetValidMoves()
@@ -111,9 +154,10 @@ namespace Runner
                 if (floor.FloorNum > 1)
                 {
                     var destFloor = Floors.First(f => f.FloorNum == (floor.FloorNum - 1));
-                    foreach (var elevatorItems in possibleElevatorItems.Where(e=>e.Count()==1 && e.Any(i=>i.ItemType==ItemType.microchip)))
+                    //foreach (var elevatorItems in possibleElevatorItems.Where(e=>e.Count()==1 && e.Any(i=>i.ItemType==ItemType.microchip)))
+                    foreach (var elevatorItems in possibleElevatorItems)
                     {
-                        var move = new Move()
+                            var move = new Move()
                         {
                             StartFloorNum = floor.FloorNum,
                             EndFloorNum = destFloor.FloorNum,
@@ -121,9 +165,14 @@ namespace Runner
                         };
 
                         if (MoveResultIsValid(move)) validMoves.Add(move);
+                        //if (MoveResultIsValid(move))
+                        //{
+                        //    validMoves.Add(move);
+                        //    Facility.Previous.Add();
+                        //}
                     }
                 }
-                
+
                 return validMoves;
             }
 
@@ -135,39 +184,40 @@ namespace Runner
             private bool MoveResultIsValid(Move move)
             {
                 //only a single chip can go down
-                if (move.EndFloorNum < move.StartFloorNum
-                    && (move.Items.Count() > 1 || move.Items.Any(i => i.ItemType == ItemType.generator)))
-                {
-                    return false;
-                }
+                //if (move.EndFloorNum < move.StartFloorNum
+                //    && (move.Items.Count() > 1 || move.Items.Any(i => i.ItemType == ItemType.generator)))
+                //{
+                //    return false;
+                //}
 
-                if (move.EndFloorNum > move.StartFloorNum 
-                    && Current.ChipsAway 
-                    && move.Items.Count() == 1
-                    && move.Items.Any(i => i.ItemType == ItemType.microchip))
-                {
-                    return false;
-                }
+                //if (move.EndFloorNum > move.StartFloorNum 
+                //    && Current.ChipsAway 
+                //    && move.Items.Count() == 1
+                //    && move.Items.Any(i => i.ItemType == ItemType.microchip))
+                //{
+                //    return false;
+                //}
 
                 var newState = Current.Clone();
                 DoMove(newState, move);
                 var startFloor = newState.Floors.First(f => f.FloorNum == move.StartFloorNum);
                 var endFloor = newState.Floors.First(f => f.FloorNum == move.EndFloorNum);
 
-                var endChips = endFloor.Items.Where(i => i.ItemType == ItemType.microchip);
-                var endGenerators = endFloor.Items.Where(i => i.ItemType == ItemType.generator);
-                var endGeneratorlessChips = endChips.Where(c => !endGenerators.Any(g => g.Material == c.Material));
+                //var endChips = endFloor.Items.Where(i => i.ItemType == ItemType.microchip);
+                //var endGenerators = endFloor.Items.Where(i => i.ItemType == ItemType.generator);
+                //var endGeneratorlessChips = endChips.Where(c => !endGenerators.Any(g => g.Material == c.Material));
 
-                var startChips = startFloor.Items.Where(i => i.ItemType == ItemType.microchip);
-                var startGenerators = startFloor.Items.Where(i => i.ItemType == ItemType.generator);
-                var startGeneratorlessChips = startChips.Where(c => !startGenerators.Any(g => g.Material == c.Material));
+                //var startChips = startFloor.Items.Where(i => i.ItemType == ItemType.microchip);
+                //var startGenerators = startFloor.Items.Where(i => i.ItemType == ItemType.generator);
+                //var startGeneratorlessChips = startChips.Where(c => !startGenerators.Any(g => g.Material == c.Material));
 
 
                 if (ChipFried(startFloor.Items) || ChipFried(endFloor.Items)
                     || Math.Abs(move.StartFloorNum - move.EndFloorNum) != 1
-                    || Previous.Contains(newState)
-                    || (startGenerators.Count() > 1 && endGeneratorlessChips.Count() > 2)
-                    || (endGenerators.Count() > 1 && startGeneratorlessChips.Count() > 2)
+                    //|| Facility.StateSeenBefore(new EquivalentState(newState, Facility.Materials))
+                    //|| Previous.Contains(newState)
+                    //|| (startGenerators.Count() > 1 && endGeneratorlessChips.Count() > 2)
+                    //|| (endGenerators.Count() > 1 && startGeneratorlessChips.Count() > 2)
                     )
                 {
                     return false;
@@ -184,7 +234,7 @@ namespace Runner
             private List<List<Item>> GetFloorElevatorItems(Floor floor)
             {
                 var moves = new List<List<Item>>();
-                var currentFloorItems = Floors.First(f => f.FloorNum == Elevator.FloorNum).Items;
+                var currentFloorItems = floor.Items;
 
                 //add same material pairs
                 moves.AddRange(currentFloorItems
@@ -192,7 +242,7 @@ namespace Runner
                                                        .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
 
                 //add same type pairs
-                moves.AddRange(currentFloorItems
+                moves.AddRange(currentFloorItems.OrderBy(i=>i.ItemType) //generators first
                     .SelectMany(i1 => currentFloorItems.Where(i => i.ItemType == i1.ItemType && i.Material < i1.Material)
                                                        .Select(i2 => new List<Item>(new Item[] { i1, i2 }))));
 
@@ -253,16 +303,16 @@ namespace Runner
 
             public static State DoMove(State newState, Move move)
             {
-                if (move.Items.Count() == 1 && move.Items.Any(i => i.ItemType == ItemType.microchip) && move.EndFloorNum < move.StartFloorNum)
-                {
-                    newState.ChipsAway = true;
-                }
+                //if (move.Items.Count() == 1 && move.Items.Any(i => i.ItemType == ItemType.microchip) && move.EndFloorNum < move.StartFloorNum)
+                //{
+                //    newState.ChipsAway = true;
+                //}
                 var startFloor = newState.Floors.First(f=>f.FloorNum==move.StartFloorNum);
                 var endFloor = newState.Floors.First(f => f.FloorNum == move.EndFloorNum);
-                startFloor.Items = new List<Item>(startFloor.Items.Except(move.Items));
-                endFloor.Items = new List<Item>(endFloor.Items.Union(move.Items));
+                startFloor.Items = startFloor.Items.Except(move.Items);
+                endFloor.Items = endFloor.Items.Union(move.Items);
                 newState.Elevator.FloorNum = move.EndFloorNum;
-                newState.Elevator.Items = new List<Item>();
+                //newState.Elevator.Items = new List<Item>();
                 return newState;
             }
         }
@@ -271,10 +321,21 @@ namespace Runner
         {
             public int StartFloorNum { get; set; }
             public int EndFloorNum { get; set; }
-            public List<Item> Items { get; set; }
+            private List<Item> _Items;
+            public IEnumerable<Item> Items
+            {
+                get
+                {
+                    return _Items;
+                }
+                set
+                {
+                    _Items = new List<Item>(value.OrderBy(i => i.Material).ThenBy(i => i.ItemType));
+                }
+            }
             public override string ToString()
             {
-                return string.Format("{0}->{1}:{2}", StartFloorNum, EndFloorNum, string.Join(", ", Items.Select(i => i.ToString()).ToArray()));
+                return string.Format("{0}->{1}:{2}", StartFloorNum, EndFloorNum, string.Join(",", Items.Select(i => i.ToString()).ToArray()));
             }
 
             public override bool Equals(object obj)
@@ -290,11 +351,65 @@ namespace Runner
             }
         }
 
+        public class PairState
+        {
+            public int GeneratorFloorNum { get; set; }
+            public int MicrochipFloorNum { get; set; }
+
+            public override string ToString()
+            {
+                return string.Format("[{0},{1}]", GeneratorFloorNum, MicrochipFloorNum);
+            }
+
+            public override bool Equals(object obj)
+            {
+                var pairState = obj as PairState;
+                if (pairState == null) return false;
+                return (GeneratorFloorNum==pairState.GeneratorFloorNum && MicrochipFloorNum==pairState.MicrochipFloorNum);
+            }
+        }
+
+        public class EquivalentState
+        {
+            public List<PairState> PairStates { get; set; }
+            public int ElevatorFloor { get; set; }
+
+            public EquivalentState(State state, List<Material> materials)
+            {
+                ElevatorFloor = state.Elevator.FloorNum;
+                PairStates = materials.Select(m => new PairState()
+                {
+                    GeneratorFloorNum =
+                        state.Floors.First(f => f.Items.Any(i => i.Material == m && i.ItemType == ItemType.generator))
+                            .FloorNum,
+                    MicrochipFloorNum =
+                        state.Floors.First(f => f.Items.Any(i => i.Material == m && i.ItemType == ItemType.microchip))
+                            .FloorNum
+                }).OrderBy(ps=>ps.GeneratorFloorNum).ThenBy(ps=>ps.MicrochipFloorNum).ToList();
+            }
+
+            public override string ToString()
+            {
+                return string.Format("{0}::{1}", ElevatorFloor,
+                    string.Join(",", PairStates.Select(ps => ps.ToString())));
+            }
+
+            public override bool Equals(object obj)
+            {
+                var equivalentState = obj as EquivalentState;
+                if (equivalentState == null) return false;
+
+                return (ElevatorFloor == equivalentState.ElevatorFloor && PairStates
+                            .Select((p, i) => equivalentState.PairStates[i].Equals(p)).All(b => b == true));
+
+            }
+        }
+
         public class State
         {
             public List<Floor> Floors { get; set; }
             public Elevator Elevator { get; set; }
-            public bool ChipsAway { get; set; }
+            //public bool ChipsAway { get; set; }
 
             public State Clone()
             {
@@ -302,7 +417,7 @@ namespace Runner
                 {
                     Floors = Floors.Select(f => f.Clone()).ToList(),
                     Elevator = Elevator.Clone(),
-                    ChipsAway = ChipsAway
+                    //ChipsAway = ChipsAway
                 };
             }
 
@@ -310,12 +425,21 @@ namespace Runner
             {
                 var state = obj as State;
                 if (state == null) return false;
-                return (Elevator.Equals(state.Elevator) && Floors.SequenceEqual(state.Floors));
+                var elevatorSame = Elevator.Equals(state.Elevator);
+                if (!elevatorSame) return false;
+
+                var floorsSame = Floor.AreSame(Floors,state.Floors);
+                return floorsSame;
             }
 
             public override int GetHashCode()
             {
                 return 109 ^ Elevator.GetHashCode() ^ Floors.SelectMany(f=>f.Items).Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b);
+            }
+
+            public override string ToString()
+            {
+                return string.Format("{0}:::{1}", Elevator, string.Join("||", Floors.Select(f => f.ToString())));
             }
         }
 
@@ -326,7 +450,7 @@ namespace Runner
 
             public override string ToString()
             {
-                return string.Format("{0:G} {1:G}", Material, ItemType);
+                return string.Format("{0}{1}", (int)Material, ItemType==ItemType.generator?"G":"C");
             }
 
             public override bool Equals(object obj)
@@ -347,20 +471,36 @@ namespace Runner
                 if (!left.Any()) return true;
                 //var leftOrdered = left.OrderBy(i => i.Material).ThenBy(i => i.ItemType);
                 //var rightOrdered = right.OrderBy(i => i.Material).ThenBy(i => i.ItemType);
-                var result = (left.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b) == right.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b));
-                //var result = !left.Any(l=>!right.Any(r=>r.Equals(l)));
-                return result;
+                //var result = (left.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b) == right.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b)) ;
+                var hashSame = (left.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b) ==
+                                right.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b));
+
+                if (!hashSame) return false;
+                var areEqual = left.All(l => right.Any(r => r.Equals(l)));
+                return areEqual;
             }
         }
 
         public class Floor
         {
             public int FloorNum { get; set; }
-            public List<Item> Items { get; set; }
+
+            private List<Item> _Items;
+            public IEnumerable<Item> Items
+            {
+                get
+                {
+                    return _Items; 
+                }
+                set
+                {
+                    _Items = new List<Item>(value.OrderBy(i=>i.Material).ThenBy(i=>i.ItemType));
+                }
+            }
 
             public override string ToString()
             {
-                return string.Format("{0} {1}", FloorNum, string.Join(",", Items.Select(i => i.ToString()).ToArray()));
+                return string.Format("{0}:{1}", FloorNum, string.Join(",", Items.Select(i => i.ToString())));
             }
 
             public override bool Equals(object obj)
@@ -372,7 +512,7 @@ namespace Runner
 
             public override int GetHashCode()
             {
-                return 199 ^ FloorNum ^ Items.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b);
+                return 199 ^ FloorNum ^ (Items.Any()?Items.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b):0);
             }
 
             public Floor Clone()
@@ -380,22 +520,36 @@ namespace Runner
                 return new Floor()
                 {
                     FloorNum = FloorNum,
-                    Items = new List<Item>(Items)
+                    _Items = new List<Item>(_Items)
                 };
+            }
+
+
+            public static bool AreSame(IEnumerable<Floor> left, IEnumerable<Floor> right)
+            {
+                if (left.Count() != right.Count()) return false;
+                if (!left.Any()) return true;
+                //var leftOrdered = left.OrderBy(i => i.Material).ThenBy(i => i.ItemType);
+                //var rightOrdered = right.OrderBy(i => i.Material).ThenBy(i => i.ItemType);
+                //var hashSame = (left.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b) ==
+                //                right.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b));
+                //if (!hashSame) return false;
+                var areEqual = left.All(l => right.Where(r=>r.FloorNum==l.FloorNum).Any(r => r.Equals(l)));
+                return areEqual;
             }
         }
 
         public class Elevator
         {
             public int FloorNum { get; set; }
-            public List<Item> Items { get; set; }
+            //public List<Item> Items { get; set; }
 
             public Elevator Clone()
             {
                 return new Elevator()
                 {
                     FloorNum = FloorNum,
-                    Items = new List<Item>(Items)
+                    //Items = new List<Item>(Items)
                 };
             }
 
@@ -403,12 +557,17 @@ namespace Runner
             {
                 var elevator = obj as Elevator;
                 if (elevator == null) return false;
-                return (FloorNum == elevator.FloorNum && Item.AreSame(Items, elevator.Items));
+                return (FloorNum == elevator.FloorNum /*&& Item.AreSame(Items, elevator.Items)*/);
             }
 
             public override int GetHashCode()
             {
-                return 73 ^ FloorNum ^ Items.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b);
+                return 73 ^ FloorNum /*^ Items.Select(i => i.GetHashCode()).Aggregate((a, b) => a ^ b)*/;
+            }
+
+            public override string ToString()
+            {
+                return string.Format("E{0}", FloorNum);
             }
         }
 
@@ -436,7 +595,7 @@ namespace Runner
 
                 var floor = new Floor() {
                     FloorNum = int.Parse(GetParts(line)[1]),
-                    Items = new List<Item>()
+                    Items = Enumerable.Empty<Item>()
                 };
 
                 floors.Add(floor);
@@ -452,97 +611,128 @@ namespace Runner
                         Material = (Material)Enum.Parse(typeof(Material), words[0]),
                         ItemType = (ItemType)Enum.Parse(typeof(ItemType), words[1])
                     };
-                    floor.Items.Add(item);
+                    floor.Items=floor.Items.Union(new Item[]{item});
                 }
             }
 
-            return new Facility() {
+            Facility.Previous = null;
+            var facility = new Facility() {
                 Current = new State()
                 {
                     Floors = floors,
                     Elevator = new Elevator()
                     {
                         FloorNum = 1,
-                        Items = new List<Item>()
+                        //Items = new List<Item>()
                     }
-                },
-                Previous = new List<State>()
+                }
             };
+            Facility.Previous = new List<EquivalentState>();
+            Facility.Materials = floors.SelectMany(f => f.Items).Select(i => i.Material).Distinct().ToList();
+            return facility;
         }
 
-        public Facility MoveToTop(Facility facility)
+        public Facility MoveToTop(Facility rootFacility)
         {
-            if (facility.Floors.Where(f => f.FloorNum != 4).All(f => !f.Items.Any()))
+            var toProcess = new Queue<Facility>();
+            toProcess.Enqueue(rootFacility);
+            Facility result = null;
+            int maxMoves = 0;
+            int batchMaxMoves = 0;
+            int batchCount = 0;
+
+            while (toProcess.Any())
             {
-                Console.WriteLine(string.Format(">>>=>{0}", facility.MovesMade));
-                return facility;
+                var facility = toProcess.Dequeue();
+
+                if (facility.MovesMade > maxMoves) maxMoves = facility.MovesMade;
+                if (facility.MovesMade > batchMaxMoves) batchMaxMoves = facility.MovesMade;
+
+                if (facility.MovesMade > 2980)
+                {
+                    Console.WriteLine("Burned");
+                    continue;
+                }
+
+                if (batchCount++ % 1000 == 0)
+                {
+                    Console.WriteLine(string.Format("Combos={0}, batchMax={1}, max={2}, queueLength={3}", batchCount, batchMaxMoves,
+                        maxMoves, toProcess.Count()));
+                }
+
+                if (facility.Floors.Where(f => f.FloorNum != 4).All(f => !f.Items.Any()))
+                {
+                    Console.WriteLine(string.Format(">>>=>{0}", facility.MovesMade));
+                    if (result == null || (facility.MovesMade < result.MovesMade))
+                    {
+                        result = facility;
+                        //                    return result;
+                    }
+                    return facility;
+                }
+                var moves = facility.GetValidMoves();
+                if (!moves.Any())
+                {
+                    continue;
+                }
+
+                //foreach (var move in moves)
+
+                //Facility parallelResult = null;
+                //object myLock = new object();
+                //Parallel.ForEach(moves, move =>
+                foreach (var move in moves)
+                {
+                    var withMove = facility.Clone().DoMove(move);
+                    //Console.WriteLine(string.Format("{0} : {1}{2}",
+                    //    string.Join("|", withMove.Floors.Select(f => string.Format("{0},{1}", f.Items.Count(i => i.ItemType == ItemType.generator), f.Items.Count(i => i.ItemType == ItemType.microchip)))),
+                    //    string.Join("", Enumerable.Repeat(" ", facility.MovesMade)),
+                    //    move));
+
+                    var equiv = new EquivalentState(withMove.Current, Facility.Materials);
+                    if (!Facility.StateSeenBefore(equiv))
+                    {
+                        toProcess.Enqueue(withMove);
+                        Facility.Previous.Add(equiv);
+                    }
+
+
+
+                    //lock (myLock)
+                    // {
+
+                    //     if (result != null)
+                    //     {
+                    //         Console.WriteLine(string.Format(">>>=>{0}", result.MovesMade));
+
+                    //         parallelResult = result;
+                    //         return parallelResult;
+                    //         break;
+                    //     }
+                    // }
+                } //);
             }
-            var moves = facility.GetValidMoves();
-            if (!moves.Any())
-            {
-                return null;
-            }
-
-            //foreach (var move in moves)
-
-            Facility parallelResult = null;
-            object myLock = new object();
-            //Parallel.ForEach(moves, move =>
-            foreach (var move in moves)
-            {
-                var withMove = facility.Clone().DoMove(move);
-                Console.WriteLine(string.Format("{0} : {1}{2}",
-                    string.Join("|", withMove.Floors.Select(f => string.Format("{0},{1}", f.Items.Count(i => i.ItemType == ItemType.generator), f.Items.Count(i => i.ItemType == ItemType.microchip)))),
-                    string.Join("", Enumerable.Repeat(" ", facility.MovesMade)),
-                    move));
-                var result = MoveToTop(withMove);
-                if (result != null) return result;
-
-                //lock (myLock)
-                // {
-                     
-                //     if (result != null)
-                //     {
-                //         Console.WriteLine(string.Format(">>>=>{0}", result.MovesMade));
-
-                //         parallelResult = result;
-                //         return parallelResult;
-                //         break;
-                //     }
-                // }
-             }//);
-            return parallelResult;
+            return result;
         }
 
         public override string First(string input)
         {
+            // to 16secs (4000+ combos) = 47
+            return DoIt(input);
+        }
+
+        private string DoIt(string input)
+        {
             var facility = GetFacility(input);
+            Console.WriteLine(facility);
             facility = MoveToTop(facility);
-            Console.WriteLine("WAITING");
-            Console.ReadLine();
             return facility.MovesMade.ToString();
-
-
-            //var facility = GetFacility(input);
-
-            //var moves = facility.GetValidMoves();
-            //Console.WriteLine();
-            //Console.WriteLine(">>>===>MOVES\r\n" + string.Join("\r\n", moves.Select(m => m.ToString()).ToArray()));
-            //facility.DoMove(moves.First());
-            //moves = facility.GetValidMoves();
-            //Console.WriteLine();
-            //Console.WriteLine(">>>===>MOVES\r\n" + string.Join("\r\n", moves.Select(m => m.ToString()).ToArray()));
-            //facility.DoMove(moves.First());
-            //moves = facility.GetValidMoves();
-            //Console.WriteLine();
-            //Console.WriteLine(">>>===>MOVES\r\n" + string.Join("\r\n", moves.Select(m => m.ToString()).ToArray()));
-            //return string.Join("\r\n", facility.Floors.Select(f => f.ToString()).ToArray());
-            
         }
 
         public override string Second(string input)
         {
-            throw new NotImplementedException();
+            // took 5min40s (15000+ combos) = 71
+            return DoIt(input);
         }
     }
 }
