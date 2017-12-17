@@ -51,7 +51,6 @@ namespace Runner
                         byte[] hashBytes = System.Text.Encoding.ASCII.GetBytes(hash);
                         hashBytes = md5.ComputeHash(hashBytes);
                         hash = string.Join("", hashBytes.Select(b => b.ToString("x2")));
-                        //if (hashRepeat>1) Console.WriteLine(hash);
                     }
                     var key = new Key()
                     {
@@ -60,15 +59,15 @@ namespace Runner
                     };
 
                     var triplets = HexTriplet.Matches(hash);
-                    if (triplets.Count >= 1) key.TripletChar = triplets[0].Value[0];
-
-                    //var tripletChar = GetTripletChar(hash);
-                    //if (tripletChar != ' ') key.TripletChar = tripletChar;
-
-                    potentialKeys.Add(key);
-                    if (potentialKeys.Count > 1001)
+                    if (triplets.Count >= 1)
                     {
-                        potentialKeys.RemoveAt(0);
+                        key.TripletChar = triplets[0].Value[0];
+
+                        potentialKeys.Add(key);
+                        if (potentialKeys.Count > 1001)
+                        {
+                            potentialKeys.RemoveAt(0);
+                        }
                     }
                     var quintets = HexQuintet.Matches(hash);
                     foreach (var quintetChar in quintets.Select(q => q.Value[0]))
@@ -82,7 +81,6 @@ namespace Runner
                             potentialKeys.Remove(matchingKey);
                         }
                     }
-                    //if ((i % 1000) == 0) Console.Write(".");
                     i++;
                     if (keys.Count >= 64 && endIndex == int.MaxValue) endIndex = keys.Last().Index + 1000;
                 }
@@ -92,21 +90,6 @@ namespace Runner
             var result = keys.OrderBy(k=>k.Index).Take(64).ToList();
             return result;
         }
-
-        //private char GetTripletChar(string hash)
-        //{
-        //    for (int i = 0; i < hash.Length-2; i++)
-        //    {
-        //        char c = hash[i];
-
-        //        if ((i == 0 || hash[i - 1] != c) && hash[i + 1] == c
-        //            && hash[i + 2] == c && (i == hash.Length - 3 || hash[i + 3] != c))
-        //        {
-        //            return c;
-        //        }
-        //    }
-        //    return ' ';
-        //}
 
         public override string First(string input)
         {
