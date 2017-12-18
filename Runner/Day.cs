@@ -100,7 +100,7 @@ namespace Runner
 
             foreach (var line in lines)
             {
-
+                if (line[0] == '#') continue;
                 var parts = line.Split(":");
                 var testInput = parts[0];
                 var expectedOutput = parts[1];
