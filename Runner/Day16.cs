@@ -21,7 +21,7 @@ namespace Runner
             {
                 a = DragonIt(a);
             } while (a.Length < length);
-            return a;
+            return a.Substring(0,length);
         }
 
         public static string GetChecksum(string a)
@@ -52,7 +52,7 @@ namespace Runner
 
         public override string Second(string input)
         {
-            throw new NotImplementedException();
+            return First(input);
         }
     }
 }
