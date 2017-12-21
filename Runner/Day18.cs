@@ -7,24 +7,24 @@ namespace Runner
 {
     class Day18 : Day
     {
-        //public override string FirstTest(string input)
-        //{
-        //    var row = input.Select(c => c == '^' ? true : false).ToArray();
-        //    var next = Enumerable.Range(0, row.Length).Select(i => IsTrap(row, i)).ToArray();
-        //    return string.Join("", next.Select(b => b ? '^' : '.'));
-        //}
-
         public override string First(string input)
         {
             //4956 too high
-            var row = input.Select(c => c == '^' ? true : false).ToArray();
-            var rows = new bool[row.Length][];
+            var parts = GetParts(input);
+
+            var rowCount = int.Parse(parts[0]);
+            var row = parts[1].Select(c => c == '^' ? true : false).ToArray();
+            var rows = new bool[rowCount][];
             rows[0] = row;
-            for (int r = 1; r < row.Length; r++)
+            for (int r = 1; r < rowCount; r++)
             {
                 row = Enumerable.Range(0, row.Length).Select(i => IsTrap(row, i)).ToArray();
                 rows[r] = row;
             }
+
+            // for first tests
+            if (rowCount==2) return string.Join("", row.Select(b => b ? '^' : '.'));
+
             return rows.SelectMany(r => r).Count(b => !b).ToString();
         }
 
@@ -38,7 +38,7 @@ namespace Runner
 
         public override string Second(string input)
         {
-            throw new NotImplementedException();
+            return First(input);
         }
     }
 }
