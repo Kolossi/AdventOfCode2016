@@ -1,0 +1,8 @@
+ebcda,swap position 4 with position 0:abcde
+edcba,swap letter d with letter b:ebcda
+abcde,reverse positions 0 through 4:edcba
+bcdea,rotate left 1 step:abcde
+bdeac,move position 1 to position 4:bcdea
+abdec,move position 3 to position 0:bdeac
+ecabd,rotate based on position of letter b:abdec
+# decab,rotate based on position of letter d:abdec // can't do this, reversal is ambiguous for length 5

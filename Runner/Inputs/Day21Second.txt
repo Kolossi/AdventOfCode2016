@@ -1,4 +1,4 @@
-abcdefgh
+fbgdceah
 swap position 7 with position 1
 swap letter e with letter d
 swap position 7 with position 6
