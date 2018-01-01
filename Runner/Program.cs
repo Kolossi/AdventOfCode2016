@@ -31,7 +31,11 @@ namespace Runner
                 //new Day20(),
                 //new Day21(),
                 //new Day22(),
+<<<<<<< HEAD
                 //new Day23(),
+=======
+                new Day23(),
+>>>>>>> refs/remotes/origin/master
                 //new Day24(),
                 new Day25()
             };
